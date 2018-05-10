@@ -23,8 +23,8 @@ sys.setdefaultencoding( "utf-8" )
 def parse_args(args):
     parser = argparse.ArgumentParser(prog="GameServer")
     parser.add_argument('configfile', nargs=1,type=str, help='')
-    parser.add_argument('--className', default="银行卡", type=str, help='')
-    parser.add_argument('--label', default="卡号", type=str, help='')
+    parser.add_argument('--startNum', default=0, type=int, help='')
+    parser.add_argument('--endNum', default=1, type=int, help='')
     #parser.add_argument('--save_pic_dir', default="/home/user/", type=str, help='')
     return parser.parse_args(args)
 
@@ -324,7 +324,7 @@ def create_synthetic_data(lmdb_path,imfolder_path,dataset,NUM_TO_GENERATE,lmdb_p
     #Creating LMDB Dataset using create_dataset function
 
     print 'Creating LMDB Dataset'
-    createDataset(lmdb_path, im_list, label_list, lexiconList=None, checkValid=True)
+    #createDataset(lmdb_path, im_list, label_list, lexiconList=None, checkValid=True)
 
     print 'Finished creating LMDB Synthetic_Data_Engine_For_Text_Recognition'
 
@@ -348,9 +348,13 @@ def main(argv):
         return
 
     label=info["label"]
-    i = info["startNum"]
-    MAXI = info["endNum"]
-
+    
+    if len(sys.argv) >1 or len(sys.argv) == 4 :
+        i = int(args.startNum)
+        MAXI = int(args.endNum)
+    else:
+        i = info["startNum"]
+        MAXI = info["endNum"]
     print "-------------gd"
     print MAXI
 

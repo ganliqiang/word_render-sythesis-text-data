@@ -1486,7 +1486,6 @@ class WordRenderer(object):
 
                 last_rect = newrect
             last_rect = newrect
-
         return bg_surf,char_bbs
 
 
@@ -1783,13 +1782,13 @@ class WordRenderer(object):
                 rgb_canvas = self.stack_arr((bound, bound, bound))
             else:
                 rgb_canvas=bound
-            canvas_surf = pygame.surfarray.make_surface(rgb_canvas.swapaxes(0, 1))
+            #canvas_surf = pygame.surfarray.make_surface(rgb_canvas.swapaxes(0, 1))
             # for char_bb in char_bbs:
             #     pygame.draw.rect(canvas_surf, (255,0,0), char_bb, 2)
             #dgfs=bg_surf.get_size()
-            self.screen = pygame.display.set_mode(canvas_surf.get_size())
-            self.screen.blit(canvas_surf, (0, 0))
-            pygame.display.flip()
+            #self.screen = pygame.display.set_mode(canvas_surf.get_size())
+            #self.screen.blit(canvas_surf, (0, 0))
+            #pygame.display.flip()
 
             print testuncode
             return {'image': bound, 'text': testuncode, 'label': label,
@@ -2030,7 +2029,7 @@ class WordRenderer(object):
             canvas = resize_image(canvas, newh=outheight,neww=270)
 
         # FINISHED, SHOW ME SOMETHING
-        pygame_display=True
+        pygame_display=False
         canvas=canvas.astype(int)
         if pygame_display:
             if canvas.ndim<3:

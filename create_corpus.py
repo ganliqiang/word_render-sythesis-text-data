@@ -9,6 +9,7 @@ import random
 import time
 from decimal import Decimal
 import math
+import numpy as np
 
 def progressbar(cur, total, begin_time = 0, cur_time = 0, info = ''):
     sys.stdout.write('\r')
@@ -462,10 +463,10 @@ def create_date(split=False, capital = True, character = True):
             chars_tmp=[year_chars, month_chars, day_chars]
         yield chars_tmp
 
-def create_date_single(split=False, capital = True, character = True):
+def create_date_cha(split=False, capital = True, character = True):
     year_dict = {'0': [u'零'],
                  '1': [u'壹'],
-                 '2': [u'貳'],
+                 '2': [u'贰'],
                  '3': [u'叁'],
                  '4': [u'肆'],
                  '5': [u'伍'],
@@ -474,7 +475,144 @@ def create_date_single(split=False, capital = True, character = True):
                  '8': [u'捌'],
                  '9': [u'玖']}
     month_dict = {'01': [u'零壹', u'壹'],
-                  '02': [u'零貳', u'貳'],
+                  '02': [u'零贰', u'贰'],
+                  '03': [u'零叁', u'叁'],
+                  '04': [u'零肆', u'肆'],
+                  '05': [u'零伍', u'伍'],
+                  '06': [u'零陆', u'陆'],
+                  '07': [u'零柒', u'柒'],
+                  '08': [u'零捌', u'捌'],
+                  '09': [u'零玖', u'玖'],
+                  '10': [u'拾', u'壹拾', u'零拾', u'零壹拾'],
+                  '11': [u'拾壹', u'壹拾壹', u'零壹拾壹'],
+                  '12': [u'拾贰', u'壹拾贰', u'零壹拾贰']}
+    day_dict = {'01': [u'零壹', u'壹'],
+                '02': [u'零贰', u'贰'],
+                '03': [u'零叁', u'叁'],
+                '04': [u'零肆', u'肆'],
+                '05': [u'零伍', u'伍'],
+                '06': [u'零陆', u'陆'],
+                '07': [u'零柒', u'柒'],
+                '08': [u'零捌', u'捌'],
+                '09': [u'零玖', u'玖'],
+                '10': [u'拾', u'壹拾', u'零拾', u'零壹拾'],
+                '11': [u'拾壹', u'壹拾壹', u'零拾壹', u'零壹拾壹'],
+                '12': [u'拾贰', u'壹拾贰', u'零拾贰', u'零壹拾贰'],
+                '13': [u'拾叁', u'壹拾叁', u'零拾叁', u'零壹拾叁'],
+                '14': [u'拾肆', u'壹拾肆', u'零拾肆', u'零壹拾肆'],
+                '15': [u'拾伍', u'壹拾伍', u'零拾伍', u'零壹拾伍'],
+                '16': [u'拾陆', u'壹拾陆', u'零拾陆', u'零壹拾陆'],
+                '17': [u'拾柒', u'壹拾柒', u'零拾柒', u'零壹拾柒'],
+                '18': [u'拾捌', u'壹拾捌', u'零拾捌', u'零壹拾捌'],
+                '19': [u'拾玖', u'壹拾玖', u'零拾玖', u'零壹拾玖'],
+                '20': [u'贰拾', u'零贰拾'],
+                '21': [u'贰拾壹', u'零贰拾壹'],
+                '22': [u'贰拾贰', u'零贰拾贰'],
+                '23': [u'贰拾叁', u'零贰拾叁'],
+                '24': [u'贰拾肆', u'零贰拾肆'],
+                '25': [u'贰拾伍', u'零贰拾伍'],
+                '26': [u'贰拾陆', u'零贰拾陆'],
+                '27': [u'贰拾柒', u'零贰拾柒'],
+                '28': [u'贰拾捌', u'零贰拾捌'],
+                '29': [u'贰拾玖', u'零贰拾玖'],
+                '30': [u'叁拾', u'零叁拾'],
+                '31': [u'叁拾壹', u'零叁拾壹']}
+    time_from = int(time.mktime((1970, 1, 1, 8, 0, 0, 0, 0, 0)))
+    time_to = int(time.mktime((2100, 1, 1, 8, 0, 0, 0, 0, 0)))
+    # time_from_most_1 = int(time.mktime((2017, 10, 20, 8, 0, 0, 0, 0, 0)))
+    # time_to_most_1 = int(time.mktime((2017, 11, 15, 8, 0, 0, 0, 0, 0)))
+    # time_from_most_2 = int(time.mktime((2017, 6, 1, 8, 0, 0, 0, 0, 0)))
+    # time_to_most_2 = int(time.mktime((2018, 4, 1, 8, 0, 0, 0, 0, 0)))
+    begin_time = time.time()
+    chars_list = []
+    while True:
+        # random_range = random.randint(0, 9)
+        # if random_range < 4:
+        #     random_second = random.randint(time_from_most_1, time_to_most_1)
+        # elif random_range < 8:
+        #     random_second = random.randint(time_from_most_2, time_to_most_2)
+        # else:
+        random_second = random.randint(time_from, time_to)
+        date_gen = time.localtime(random_second)
+        # mode = random.randint(1, 1)
+        if character:
+            mode = 1
+        else:
+            mode = random.randint(2, 4)
+        if mode == 1:
+            year_chars = ''
+            for char in '%04d' % date_gen.tm_year:
+                way_write = year_dict[char]
+                year_chars += random.sample(way_write, 1)[0]
+            way_write = month_dict['%02d' % date_gen.tm_mon]
+            month_chars = random.sample(way_write, 1)[0]
+            way_write = day_dict['%02d' % date_gen.tm_mday]
+            day_chars = random.sample(way_write, 1)[0]
+            chars_tmp = year_chars + u'年' + month_chars + u'月' + day_chars + u'日'
+            if np.random.rand()<0.02:
+                if random.randint(0,2)==1:
+                    chars_tmp = chars_tmp.replace(u'贰',u'貳')#贰  貳
+                else:
+                    chars_tmp = chars_tmp.replace(u'贰',u'弍')
+                chars_tmp = chars_tmp.replace(u'陆',u'陸')
+            if not capital:
+                chars_tmp = chars_tmp.replace(u'貳', u'贰')
+                chars_tmp = chars_tmp.replace(u'弍', u'贰')
+                chars_tmp = chars_tmp.replace(u'陸', u'陆')
+        else:
+            year_chars = '%04d' % date_gen.tm_year
+            if mode == 2:
+                month_chars = '%02d' % date_gen.tm_mon
+                day_chars = '%02d' % date_gen.tm_mday
+                chars_tmp = year_chars + month_chars + day_chars
+            else:
+                if random.randint(1, 2) == 1:
+                    month_chars = '%02d' % date_gen.tm_mon
+                    day_chars = '%02d' % date_gen.tm_mday
+                else:
+                    month_chars = '%d' % date_gen.tm_mon
+                    day_chars = '%d' % date_gen.tm_mday
+                if mode == 3:
+                    chars_tmp = year_chars + '-' + month_chars + '-' + day_chars
+                else:
+                    chars_tmp = year_chars + '/' + month_chars + '/' + day_chars
+        if split:
+            if u'年' in chars_tmp:
+                chars_part = chars_tmp.split(u'年')
+                year_chars = chars_part[0]
+                month_day_part = chars_part[1].split(u'月')
+                month_chars = month_day_part[0]
+                day_chars = month_day_part[1].replace(u'日', '')
+            elif '/' in chars_tmp:
+                chars_part = chars_tmp.split('/')
+                year_chars = chars_part[0]
+                month_chars = chars_part[1]
+                day_chars = chars_part[2]
+            elif '-' in chars_tmp:
+                chars_part = chars_tmp.split('-')
+                year_chars = chars_part[0]
+                month_chars = chars_part[1]
+                day_chars = chars_part[2]
+            else:
+                year_chars = chars_tmp[0:4]
+                month_chars = chars_tmp[4:6]
+                day_chars = chars_tmp[6:8]
+            chars_tmp=[year_chars, month_chars, day_chars]
+        yield chars_tmp
+
+def create_date_single(split=False, capital = True, character = True):
+    year_dict = {'0': [u'零'],
+                 '1': [u'壹'],
+                 '2': [u'贰'],
+                 '3': [u'叁'],
+                 '4': [u'肆'],
+                 '5': [u'伍'],
+                 '6': [u'陆'],
+                 '7': [u'柒'],
+                 '8': [u'捌'],
+                 '9': [u'玖']}
+    month_dict = {'01': [u'零壹', u'壹'],
+                  '02': [u'零贰', u'贰'],
                   '03': [u'零叁', u'叁'],
                   '04': [u'零肆', u'肆'],
                   '05': [u'零伍', u'伍'],
