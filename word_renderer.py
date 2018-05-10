@@ -156,7 +156,7 @@ def grey_blit(src, dst, blend_mode=MJBLEND_NORMAL):
     old_setting = n.seterr(invalid='ignore')
     src_pre = src[rgb] * src_a
     dst_pre = dst[rgb] * dst_a
-    # blend:
+    # blend: 混合色 基色
     blendfuncs = {MJBLEND_NORMAL: lambda s, d, sa_: s + d * sa_, MJBLEND_ADD: lambda s, d, sa_: n.minimum(255, s + d),
         MJBLEND_SUB: lambda s, d, sa_: n.maximum(0, s - d), MJBLEND_MULT: lambda s, d, sa_: s * d * sa_ / 255.0,
         MJBLEND_MULTINV: lambda s, d, sa_: (255.0 - s) * d * sa_ / 255.0,
@@ -1195,7 +1195,7 @@ class WordRenderer(object):
 
 
 
-    def add_fillimage(self, arr):
+    def add_fillimage(self, arr,depth=1.0):
         """
         Adds a fill image to the array.
         For blending this might be useful:
@@ -1207,6 +1207,7 @@ class WordRenderer(object):
             image = fis['image']
             blend_mode = fis['blend_mode']
             blend_amount = fis['blend_amount']
+            blend_amount=depth*blend_amount
             blend_order = fis['blend_order']
 
             # change alpha of the image
@@ -1247,7 +1248,7 @@ class WordRenderer(object):
 
         return arr
 
-    def global_distortions(self, arr):
+    def global_distortions(self, arr,depth=1.0):
         # http://scipy-lectures.github.io/advanced/image_processing/#image-filtering
         ds = self.diststate.get_sample()
 
@@ -1257,6 +1258,7 @@ class WordRenderer(object):
         noise = ds['noise']
 
         newarr = n.minimum(n.maximum(0, arr + n.random.normal(0, noise, arr.shape)), 255)
+        blur=depth*blur
         if blur > 0.1:
             newarr = ndimage.gaussian_filter(newarr, blur)
         if sharpen:
@@ -1265,7 +1267,8 @@ class WordRenderer(object):
 
         if ds['resample']:
             sh = newarr.shape[0]
-            newarr = resize_image(newarr, newh=ds['resample_height'])
+            smallH=ds['resample_height']*depth+(1-depth)*sh
+            newarr = resize_image(newarr, newh=smallH)
             newarr = resize_image(newarr, newh=sh)
 
         return newarr
@@ -1295,13 +1298,13 @@ class WordRenderer(object):
     def getPrintCaptcha(self,font,display_text_list,bg_surf,char_spacing,spaceH,size,curved=False,label=" ",adjust_value={}):
         #display_text_list=[['1','2','3','4','5','6','7']]
         display_text = display_text_list[0]
-        if "1" in display_text:
+        if "貳" in display_text:
             dksj=0
         mid_idx = int(math.floor(len(display_text) / 2))
         curve = [0 for c in display_text]
         rotations = [0 for c in display_text]
 
-
+        color=(200,200,255)
         if curved and len(display_text) > 1:
             bs = self.baselinestate.get_sample()
             for i, c in enumerate(display_text[mid_idx + 1:]):
@@ -1375,7 +1378,7 @@ class WordRenderer(object):
                     flag = True
                     rect.x = rect.x - adjust
                 last_rect = rect
-            bbrect = font.render_to(bg_surf, rect, c, rotation=rotations[mid_idx])  # fgcolor=(200,255,255)
+            bbrect = font.render_to(bg_surf, rect, c, rotation=rotations[mid_idx],fgcolor=color)  # fgcolor=(200,255,255)
             #if c == u"（" or c == u"１":
              #   rect.x = rect.x + int(1.7 * rect[2])
             if flag:
@@ -1420,9 +1423,9 @@ class WordRenderer(object):
                         newrect.x = newrect.x - adjust
                 # ??
                 try:
-                    bbrect = font.render_to(bg_surf, newrect, c, rotation=rotations[mid_idx + i + 1])
+                    bbrect = font.render_to(bg_surf, newrect, c, rotation=rotations[mid_idx + i + 1],fgcolor=color)
                 except ValueError:
-                    bbrect = font.render_to(bg_surf, newrect, c)
+                    bbrect = font.render_to(bg_surf, newrect, c,fgcolor=color)
                 #if c == u"（" or c == u"１":
                  #   newrect.x = newrect.x + int(1.7 * newrect[2])
                 bbrect.x = newrect.x
@@ -1470,9 +1473,9 @@ class WordRenderer(object):
                         flag = True
                         newrect.x = newrect.x - adjust
                 try:
-                    bbrect = font.render_to(bg_surf, newrect, c, rotation=rotations[mid_idx - i - 1])
+                    bbrect = font.render_to(bg_surf, newrect, c,fgcolor=color, rotation=rotations[mid_idx - i - 1])
                 except ValueError:
-                    bbrect = font.render_to(bg_surf, newrect, c)
+                    bbrect = font.render_to(bg_surf, newrect, c,fgcolor=color)
                 #if c == u"（" or c == u"１":
                  #   newrect.x = newrect.x + int(1.5 * newrect[2])
                 if ii == 0:
@@ -1486,6 +1489,7 @@ class WordRenderer(object):
 
                 last_rect = newrect
             last_rect = newrect
+
         return bg_surf,char_bbs
 
 
@@ -1698,6 +1702,17 @@ class WordRenderer(object):
                 print(bg_surf.get_size())
                 #黑底白字
                 bg_surf, char_bbs=self.getPrintCaptcha(font,display_text_list,bg_surf,char_spacing,spaceH,fs['size'],fs["curved"],label=info["label"],adjust_value=info["char_config"]["leftAdjust"])
+
+
+                #bg_arr = self.get_ga_image(bg_surf)
+                #canvas_surf = pygame.surfarray.make_surface(bg_arr)
+                #self.screen = pygame.display.set_mode(canvas_surf.get_size())
+                #self.screen.blit(canvas_surf, (0, 0))
+                #pygame.display.flip()
+
+
+
+
                 bg_arr = self.get_ga_image(bg_surf)  # 0,1（有值）
                 bound=bg_arr[..., 1]
                 img = Image.fromarray(255-bound)
@@ -1766,22 +1781,47 @@ class WordRenderer(object):
         except Exception:
             keeplabel = True
         if not noise:
+            deg=random.uniform(-0.7, -0.1)
+            if not fontPic:
+               if n.random.rand()<0.1:
+                  deg=-deg
+            else:
+                deg=-0.7 
             for i,bound in enumerate(bound_list):
                 bb = pygame.Rect(self.get_bb(bound))
                 bound = self.imcrop(bound, bb)
+                blur=random.uniform(0.5,0.8)
+                bound = ndimage.gaussian_filter(bound, blur)
+
+                bound = exposure.adjust_gamma(image=bound, gamma=math.exp(deg))
                 img=Image.fromarray(bound)
                 #img.show()
                 bound = bound *value
                 bound_list[i]=bound
 
-            #bg_arr = exposure.adjust_gamma(image=bg_arr, gamma=math.exp(5))
             bound = self.add_fillimage_p(bound_list,info["output_config"])
+            #image_np = exposure.adjust_gamma(image=image_np, gamma=math.exp(random.uniform(-0.5, -0.5)))
+            '''
+            if random.randint(0, 2) == 0 or True:
+                pass
+            if random.randint(0, 2) == 2:
+                image_np = util.random_noise(image_np, mode='gaussian', mean=0, var=0.001)
+                bound = Image.fromarray(n.array(image_np * 255, dtype=n.uint8))
+            '''
 
 
-            if bound.ndim<3:
-                rgb_canvas = self.stack_arr((bound, bound, bound))
-            else:
-                rgb_canvas=bound
+
+
+
+
+
+
+
+
+            #if bound.ndim<3:
+            #    rgb_canvas = self.stack_arr((bound, bound, bound))
+            #else:
+            #    rgb_canvas=bound
             #canvas_surf = pygame.surfarray.make_surface(rgb_canvas.swapaxes(0, 1))
             # for char_bb in char_bbs:
             #     pygame.draw.rect(canvas_surf, (255,0,0), char_bb, 2)
@@ -1799,8 +1839,10 @@ class WordRenderer(object):
                 flag = True
         except Exception:
             pass
+        depth=info["noise_config"]["depth"]
         angle = info["noise_config"]["rotateAngle"]
         random_angle = random.uniform(-angle, angle)
+        random_angle=random_angle*depth
         for i, bound in enumerate(bound_list):
 
             #img=Image.fromarray(bound)
@@ -1808,14 +1850,18 @@ class WordRenderer(object):
             bound = self.apply_perspective_arr(bound,pts31)
             bb = pygame.Rect(self.get_bb(bound))
             bound = self.imcrop(bound, bb)
+            #bound=255-bound
             bound = bound * value
             bound_list[i] = bound
-            img = Image.fromarray(bound)
+            #img = Image.fromarray(bound)
             #img.show()
             pass
         if flag:
             l1_arr = self.add_fillimage_p(bound_list, info["output_config"])
             l1_arr = l1_arr[..., 1]
+            img = Image.fromarray(l1_arr)
+            #img.show()
+            pass
         # border/shadow
         '''
         if fs['border']:
@@ -1958,7 +2004,7 @@ class WordRenderer(object):
         try:
             if True:
                 #随机背景
-                canvas = self.add_fillimage(canvas)
+                canvas = self.add_fillimage(canvas,depth)
             else:
                 #canvas = self.add_fillimage_p(canvas)
                 pass
@@ -2003,7 +2049,7 @@ class WordRenderer(object):
                 "\tcan't get good contrast"
                 return None
         #canvas=canvas.astype('uint8')
-        #canvas = canvas[..., 2]
+        #canvas = l1_arr[..., 1]
         canvas = globalcanvas
 
         # do elastic distortion described by http://research.microsoft.com/pubs/68920/icdar03.pdf
@@ -2012,13 +2058,16 @@ class WordRenderer(object):
 
         #canvas = resize_image(canvas, newh=64, neww=270)
         # add global distortions
-        canvas = self.global_distortions(canvas)
+        canvas = self.global_distortions(canvas,depth)
 
         # noise removal
+        if depth<1:
+            wid=1
+        else:wid=3
         if convertGray :
-            filterSize=(3,3)
+            filterSize=(wid,wid)
         else:
-            filterSize=(3,3,canvas.shape[2])
+            filterSize=(wid,wid,canvas.shape[2])
         canvas = ndimage.filters.median_filter(canvas, size=filterSize)
         # resize
         #outheight=64
@@ -2029,7 +2078,7 @@ class WordRenderer(object):
             canvas = resize_image(canvas, newh=outheight,neww=270)
 
         # FINISHED, SHOW ME SOMETHING
-        pygame_display=False
+        pygame_display=True
         canvas=canvas.astype(int)
         if pygame_display:
             if canvas.ndim<3:
@@ -2037,13 +2086,13 @@ class WordRenderer(object):
             else :
                 rgb_canvas=canvas
             #rgb_canvas=rgb_canvas[...,1]
-            canvas_surf = pygame.surfarray.make_surface(rgb_canvas.swapaxes(0, 1))
+           # canvas_surf = pygame.surfarray.make_surface(rgb_canvas.swapaxes(0, 1))
             # for char_bb in char_bbs:
             #     pygame.draw.rect(canvas_surf, (255,0,0), char_bb, 2)
             #dgfs=bg_surf.get_size()
-            self.screen = pygame.display.set_mode(canvas_surf.get_size())
-            self.screen.blit(canvas_surf, (0, 0))
-            pygame.display.flip()
+           # self.screen = pygame.display.set_mode(canvas_surf.get_size())
+           # self.screen.blit(canvas_surf, (0, 0))
+           # pygame.display.flip()
         print "--------------------"
 
         # pyplot.imshow(self.get_image())
