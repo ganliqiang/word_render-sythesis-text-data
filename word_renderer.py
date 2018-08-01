@@ -28,6 +28,7 @@ import cv2
 import json
 from skimage import exposure, util
 from yinhangcard import makePic,adjustBck
+from back_adjust import BackAdjust
 
 def wait_key():
     while True:
@@ -538,7 +539,8 @@ class TrainingCharsColourState(object):
     def __init__(self, matfn="/home/ubuntu/Datasets/SVT/icdar_2003_train.txt"):
         # self.ims = loadmat(matfn)['images']
         # with open(matfn) as f: self.ims = f.read().splitlines()
-        list_fn = list(pd.read_csv(matfn, sep='\t')['Image_Path'])
+        #list_fn = list(pd.read_csv(matfn, sep='\t')['Image_Path'])
+        list_fn=[os.path.join(matfn,file.strip()) for file in os.listdir(matfn) if file.endswith(".jpg")]
         self.ims = list_fn
 
     def get_sample(self, n_colours):
@@ -668,68 +670,70 @@ class SVTFillImageState(FillImageState):
         #    with open(gtmat_fn) as f:
         #        self.IMLIST += (f.read().splitlines())
         #        print self.IMLIST
-    def get_sample_p(self, surfarr,red,keeplabel=True,fontPic=False):
+    def get_sample_p(self, surfarr,outconfig=None):
         import numpy as np
         fileimge=random.choice(self.label_back)
         h,w = surfarr.shape[:2]
         print h
-        faldl = fileimge.replace(".jpg", ".lar")
-        with open(faldl, 'rb') as f:
-            setting = json.load(f, "gbk")
-            print  setting[0]["rect"]
-            tt = setting[0]
-        if len(tt["rect"].split(",")) != 4:
-            # img.show
-            return
-        left = int(tt["rect"].split(",")[0])
-        up = int(tt["rect"].split(",")[1])
-        right = int(tt["rect"].split(",")[2])
-        down = int(tt["rect"].split(",")[3])
-
-        if up + h >= down or left+w>=right:
-            print("error:the font size is too big")
-            raise ValueError
-        box0 = (left, up, right, down)
         img = Image.open(fileimge)
-        if fontPic:
-            img, (left, up, right, down) = adjustBck(box0, img, surfarr.shape[:2])
-            alpha = surfarr
-            '''
-            if surfarr.ndim>2:
-                alpha=rgb2gray(surfarr)
-            else:
-                alpha=surfarr
-            '''
-        else:
-            #alpha = surfarr[..., 1]
-            alpha = surfarr
+        faldl = fileimge.replace(".jpg", ".lar")
+        #设置粘贴区域
+        try:
+            with open(faldl, 'rb') as f:
+                setting = json.load(f, "gbk")
+                print  setting[0]["rect"]
+                tt = setting[0]
+            if len(tt["rect"].split(",")) != 4:
+                # img.show
+                return
+            left = int(tt["rect"].split(",")[0])
+            up = int(tt["rect"].split(",")[1])
+            right = int(tt["rect"].split(",")[2])
+            down = int(tt["rect"].split(",")[3])
+        except Exception:
+            (left, up, right, down)=(1,1,img.size[0], img.size[1])
+        box0 = (left, up, right, down)
+        #背景调整
+        try:
+            adjust=BackAdjust(img,charSize=surfarr.shape[:2],oriBox=box0,Height=outconfig["output_height"],Width=outconfig["output_width"])
+            adjust_fun=getattr(adjust,outconfig["back_adjust"])
+            img, (left, up, right, down)=adjust_fun()
+        except Exception:
+            pass
+        if up + h >= down or left + w >= right:
+            print("error:the font size is too big")
+            #粘贴区域不足以容下字符图
+            raise ValueError
+        #生成随机区域
+        if  outconfig["ver_random"]:
+            down = random.randint(up + h, down)
+            up = down - h
+        else:down=up+h
+
+        if  outconfig["hor_random"]:
+            right = random.randint(left + w, right)
+            left = right - w
+        else:right=left+w
+        alpha = surfarr
+
         #转成白底黑字
         alpha[:] = 255 - alpha[:]
         alpha = alpha.reshape((alpha.shape[0], alpha.shape[1], 1))
         surfarr = np.concatenate((alpha, alpha, alpha), axis=2)
-        heheight = random.randint(up + h, down)
-        down = heheight
-        up = heheight - h
 
-        import numpy as np
-
-        img_np=np.array(img)
-
-        if w < right - left:
-            right = left + w
         region = img.crop((left, up, right, down))
         region = np.array(region)
 
         surfarr = surfarr.astype(np.float32)
         surfarr[:] = surfarr[:] / 255.0
-        if red:
+        if outconfig["red"]:
             surfarr[...,0]=1
         region=region*surfarr
         print(region.shape[0])
         region = region.astype(np.uint8)
 
         img.paste(Image.fromarray(region), (left, up, right, down))
-        if not keeplabel:
+        if not outconfig["keep_label"] :
             a = random.randint(  0, 3)
             b = random.randint(  0, 3)
             c = random.randint(  0, 3)
@@ -1143,9 +1147,9 @@ class WordRenderer(object):
             return arr[rect[1]:rect[1] + rect[3], rect[0]:rect[0] + rect[2]]
 
 
-    def add_fillimage_p(self, arr,red,keeplabel=True,fontPic=False):
+    def add_fillimage_p(self, arr,outconfig=None):
 
-        return self.fillimstate.get_sample_p(arr,red,keeplabel,fontPic)
+        return self.fillimstate.get_sample_p(arr,outconfig)
 
 
 
@@ -1246,12 +1250,13 @@ class WordRenderer(object):
         arr = ndimage.map_coordinates(origarr, coords, order=1, mode='nearest')
         return arr.reshape(origarr.shape)
 
-    def getPrintCaptcha(self,font,display_text_list,bg_surf,char_spacing,spaceH,size,curved=False,label=" "):
+    def getPrintCaptcha(self,font,display_text_list,bg_surf,char_spacing,spaceH,size,curved=False,label=" ",adjust_value={}):
         display_text = display_text_list[0]
 
         mid_idx = int(math.floor(len(display_text) / 2))
         curve = [0 for c in display_text]
         rotations = [0 for c in display_text]
+
 
         if curved and len(display_text) > 1:
             bs = self.baselinestate.get_sample()
@@ -1277,16 +1282,35 @@ class WordRenderer(object):
 
         wid=font.get_rect("1")[2]
         flag = False
-        adjust = int(0.5 * wid)
+
+        adjust = 0
+        '''
+        adjust_value[u"《"]=int(2.0 * wid)
+        adjust_value[u"|"] = int(1.5 * wid)
+        adjust_value[u"“"] = int(2.5 * wid)
+        adjust_value[u"〈"] = int(2.0 * wid)
+        adjust_value[u"￥"] = int(1 * wid)
+        adjust_value[u"‘"] = int(2.5 * wid)
+        adjust_value[u"·"] = int(2.0 * wid)
+        adjust_value[u"（"]=int(1.7 * wid)
+        adjust_value[u"１"] = int(1.7 * wid)
+        adjust_value[u"I"] = int(1* wid)
+        adjust_value[u"1"] = int(0.5 * wid)
+        '''
+        if label == "NO":
+            # adjust = int(0.7 * wid)
+            adjust_value[u"1"] = 0
+        '''
         if label=="NO":
-            adjust = int(0.7 * wid)
+            #adjust = int(0.7 * wid)
+            adjust=0
         if label == "No":
             adjust = int(0.5 * wid)
         if label == "核准号":
             adjust=int(0.5 * wid)
         if label == "代码":
             adjust = int(0.6 * wid)
-
+        '''
         for i in range(lineNum):
             if len(display_text_list[i]) <= mid_idx:
                 rect.centery += (rect.height + spaceH + curve[mid_idx])
@@ -1297,20 +1321,23 @@ class WordRenderer(object):
             rect = font.get_rect(c)
             rect.centerx = bg_centerx
             rect.centery = bg_centery
-            if c == u"（" or c == u"１":
-                rect.x = rect.x - int(1.7 * rect[2])
+            #if c == u"（" or c == u"１":
+             #   rect.x = rect.x - int(1.7 * rect[2])
             rect.centery += i * (rect.height + spaceH + curve[mid_idx])
             print(rect,)
             if i == 0:
-                if c == "1":
+
+                if adjust_value.has_key(c.encode("utf-8")):#c == "1"
+                    adjust=int(adjust_value[c.encode("utf-8")] * wid)
                     flag = True
                     rect.x = rect.x - adjust
                 last_rect = rect
             bbrect = font.render_to(bg_surf, rect, c, rotation=rotations[mid_idx])  # fgcolor=(200,255,255)
-            if c == u"（" or c == u"１":
-                rect.x = rect.x + int(1.7 * rect[2])
+            #if c == u"（" or c == u"１":
+             #   rect.x = rect.x + int(1.7 * rect[2])
             if flag:
                 rect.x = rect.x + adjust
+                flag = False
 
             bbrect.x = rect.x
             bbrect.y = rect.y - rect.height
@@ -1336,30 +1363,35 @@ class WordRenderer(object):
                 newrect = font.get_rect(c)
 
                 newrect.topleft = last_rect.topleft
-                if c == u"（" or c == u"１":
-                    newrect.x = newrect.x - int(1.7 * newrect[2])
+                #if c == u"（" or c == u"１":
+                 #   newrect.x = newrect.x - int(1.7 * newrect[2])
 
                 newrect.centery += ii * (newrect.height + spaceH + curve[mid_idx + i + 1])
                 print(newrect, c)
                 if ii == 0:
-                    if c == "1" :
+                    ghgd = u"《"
+                    utf=c.encode("utf-8")
+                    if adjust_value.has_key(c.encode("utf-8")):  # c == "1"
+                        adjust=int(adjust_value[c.encode("utf-8")] * wid)
+                        flag = True
                         newrect.x = newrect.x - adjust
                 # ??
                 try:
                     bbrect = font.render_to(bg_surf, newrect, c, rotation=rotations[mid_idx + i + 1])
                 except ValueError:
                     bbrect = font.render_to(bg_surf, newrect, c)
-                if c == u"（" or c == u"１":
-                    newrect.x = newrect.x + int(1.7 * newrect[2])
+                #if c == u"（" or c == u"１":
+                 #   newrect.x = newrect.x + int(1.7 * newrect[2])
                 bbrect.x = newrect.x
                 bbrect.y = newrect.y - newrect.height
                 char_bbs.append(bbrect)
                 newrect.centery -= ii * (newrect.height + spaceH + curve[mid_idx + i + 1])
 
                 if ii == 0:
-                    if c == "1" :
+                    if flag :
                         #复位
                         newrect.x = newrect.x + adjust
+                        flag = False
                     last_rect = newrect
         # render chars to the left
 
@@ -1383,27 +1415,28 @@ class WordRenderer(object):
                     newrect.topleft = (last_rect.topleft[0], last_rect.topright[1])
 
                 # newrect.y = last_rect.y
-                if c == u"（" or c == u"１":
-                    newrect.x = newrect.x - int(1.5 * newrect[2])
+               # if c == u"（" or c == u"１":
+                #    newrect.x = newrect.x - int(1.5 * newrect[2])
                 newrect.centery += ii * (newrect.height + spaceH + curve[mid_idx - i - 1])
                 # ??
                 # newrect.centery = max(0 + newrect.height * 1,
                 #  min(self.sz[1] - newrect.height * 1, newrect.centery + curve[mid_idx - i - 1]))
                 print(newrect, c)
-                if (c == "1"or c=="I") and ii == 0:
-                    if c=="I":
-                        newrect.x = newrect.x - int(2.2*adjust)
-                    else:
+                if ii == 0:
+                    if adjust_value.has_key(c.encode("utf-8")):  # c == "1"
+                        adjust =int(adjust_value[c.encode("utf-8")] * wid)
+                        flag = True
                         newrect.x = newrect.x - adjust
                 try:
                     bbrect = font.render_to(bg_surf, newrect, c, rotation=rotations[mid_idx - i - 1])
                 except ValueError:
                     bbrect = font.render_to(bg_surf, newrect, c)
-                if c == u"（" or c == u"１":
-                    newrect.x = newrect.x + int(1.5 * newrect[2])
+                #if c == u"（" or c == u"１":
+                 #   newrect.x = newrect.x + int(1.5 * newrect[2])
                 if ii == 0:
-                    if c == "1" :
+                    if flag :
                         newrect.x = newrect.x + adjust
+                        flag = False
                 bbrect.x = newrect.x
                 bbrect.y = newrect.y - newrect.height
                 char_bbs.append(bbrect)
@@ -1463,7 +1496,7 @@ class WordRenderer(object):
         info = self.extraInfo
         if info is None:
             return
-        #display_text=u"北京市东城区聚优１对１（鼎新大厦）"
+        #display_text=u"城东‘区省“区"
         testuncode=display_text
         display_text=list(display_text)
         display_text_list=[]
@@ -1538,20 +1571,7 @@ class WordRenderer(object):
         char_bbs.append(bg_surf.get_rect())
         print(bg_surf.get_size())
 
-        font = freetype.Font(fs['font'], size=fs['size'])
 
-        # random params
-        # display_text = fs['capsmode'](display_text) if fs['random_caps'] else display_text
-
-        font.underline = fs['underline']
-        font.underline_adjustment = fs['underline_adjustment']
-        font.strong = fs['strong']
-
-        font.oblique = fs['oblique']
-        font.strength = fs['strength']
-        char_spacing = fs['char_spacing']
-        font.antialiased = True
-        font.origin = True
         # print 'hey inside generate_sample'
 
         # colour state
@@ -1579,8 +1599,22 @@ class WordRenderer(object):
         except Exception:
             fontPic=False
         if not fontPic:
+            font = freetype.Font(fs['font'], size=fs['size'])
+
+            # random params
+            # display_text = fs['capsmode'](display_text) if fs['random_caps'] else display_text
+
+            font.underline = fs['underline']
+            font.underline_adjustment = fs['underline_adjustment']
+            font.strong = fs['strong']
+
+            font.oblique = fs['oblique']
+            font.strength = fs['strength']
+            #char_spacing = fs['char_spacing']
+            font.antialiased = True
+            font.origin = True
             #黑底白字
-            bg_surf, char_bbs=self.getPrintCaptcha(font,display_text_list,bg_surf,char_spacing,spaceH,fs['size'],fs["curved"],label=info["label"])
+            bg_surf, char_bbs=self.getPrintCaptcha(font,display_text_list,bg_surf,char_spacing,spaceH,fs['size'],fs["curved"],label=info["label"],adjust_value=info["leftAdjust"])
             bg_arr = self.get_ga_image(bg_surf)  # 0,1（有值）
             bound=bg_arr[..., 1]
         else:
@@ -1641,7 +1675,7 @@ class WordRenderer(object):
             bound = bound *value
 
             #bg_arr = exposure.adjust_gamma(image=bg_arr, gamma=math.exp(5))
-            bound = self.add_fillimage_p(bound,red,keeplabel,fontPic)
+            bound = self.add_fillimage_p(bound,info["output_config"])
 
 
             if bound.ndim<3:
@@ -1750,7 +1784,7 @@ class WordRenderer(object):
 
         l1_arr = self.imcrop(l1_arr, bb)
         l1_arr = l1_arr * value
-        l1_arr = self.add_fillimage_p(l1_arr,red,keeplabel,fontPic)
+        l1_arr = self.add_fillimage_p(l1_arr,info["output_config"])
         #gray=rgb2gray(l1_arr)
         #3通道图
         gray=l1_arr[...,1]
@@ -1859,7 +1893,7 @@ class WordRenderer(object):
             canvas = resize_image(canvas, newh=outheight,neww=270)
 
         # FINISHED, SHOW ME SOMETHING
-        pygame_display=False
+        pygame_display=True
         canvas=canvas.astype(int)
         if pygame_display:
             if canvas.ndim<3:
