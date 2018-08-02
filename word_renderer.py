@@ -654,15 +654,17 @@ class SVTFillImageState(FillImageState):
 
     def __init__(self, label_data_dir,random_data_dir,isNoise):
         list_fn = []
-        for file in os.listdir(label_data_dir):
-            if file.endswith(".jpg"):
-                list_fn.append(os.path.join(label_data_dir,file))
+        if os.path.exists(random_data_dir):
+            for file in os.listdir(label_data_dir):
+                if file.endswith(".jpg"):
+                    list_fn.append(os.path.join(label_data_dir,file))
         self.label_back = list_fn
         if isNoise:
             list_fn = []
-            for file in os.listdir(random_data_dir):
-                if file.endswith(".jpg"):
-                    list_fn.append(os.path.join(random_data_dir, file))
+            if os.path.exists(random_data_dir):
+                for file in os.listdir(random_data_dir):
+                    if file.endswith(".jpg"):
+                        list_fn.append(os.path.join(random_data_dir, file))
             self.IMLIST = list_fn
 
         # print list_fn
@@ -672,10 +674,17 @@ class SVTFillImageState(FillImageState):
         #        print self.IMLIST
     def get_sample_p(self, surfarr,outconfig=None):
         import numpy as np
-        fileimge=random.choice(self.label_back)
-        h,w = surfarr.shape[:2]
-        print h
-        img = Image.open(fileimge)
+
+        try :
+            fileimge = random.choice(self.label_back)
+            h, w = surfarr.shape[:2]
+            print h
+            img = Image.open(fileimge)
+        except Exception:
+            surfarr=surfarr.astype(np.uint8)
+            surfarr[:] = 255 - surfarr[:]
+            surfarr = surfarr.reshape((surfarr.shape[0], surfarr.shape[1], 1))
+            return np.concatenate((surfarr, surfarr, surfarr), axis=2)
         faldl = fileimge.replace(".jpg", ".lar")
         #设置粘贴区域
         try:
@@ -691,7 +700,7 @@ class SVTFillImageState(FillImageState):
             right = int(tt["rect"].split(",")[2])
             down = int(tt["rect"].split(",")[3])
         except Exception:
-            (left, up, right, down)=(1,1,img.size[0], img.size[1])
+            (left, up, right, down)=(2,2,img.size[0], img.size[1])
         box0 = (left, up, right, down)
         #背景调整
         try:
@@ -699,6 +708,7 @@ class SVTFillImageState(FillImageState):
             adjust_fun=getattr(adjust,outconfig["back_adjust"])
             img, (left, up, right, down)=adjust_fun()
         except Exception:
+            #未设置背景调整
             pass
         if up + h >= down or left + w >= right:
             print("error:the font size is too big")
@@ -738,8 +748,11 @@ class SVTFillImageState(FillImageState):
             b = random.randint(  0, 3)
             c = random.randint(  0, 3)
             d = random.randint(  0, 3)
-
-            img = img.crop(( left-a, up-b, right+ c,down+ d))
+            left=max(left-a,0)
+            up = max(up - b, 1)
+            right=min(img.size[0],right+ c)
+            down = min(img.size[1], down + d)
+            img = img.crop(( left, up, right,down))
             return np.array(img)
         return np.array(img)
 
@@ -899,7 +912,7 @@ class WordRenderer(object):
         halfH=h/2.0
         #angle1=math.atan(float(h)/w)
         try:
-            angle = self.extraInfo["rotateAngle"]
+            angle = self.extraInfo["noise_config"]["rotateAngle"]
         except Exception:
             angle=5
         random_angle=random.uniform(0,angle)
@@ -1162,25 +1175,27 @@ class WordRenderer(object):
         - http://stackoverflow.com/questions/601776/what-do-the-blend-modes-in-pygame-mean
         - http://stackoverflow.com/questions/5605174/python-pil-function-to-divide-blend-two-images
         """
+        try :
+            fis = self.fillimstate.get_sample(arr)
+            image = fis['image']
+            blend_mode = fis['blend_mode']
+            blend_amount = fis['blend_amount']
+            blend_order = fis['blend_order']
 
-        fis = self.fillimstate.get_sample(arr)
-
-        image = fis['image']
-        blend_mode = fis['blend_mode']
-        blend_amount = fis['blend_amount']
-        blend_order = fis['blend_order']
-
-        # change alpha of the image
-        if blend_amount > 0:
-            if blend_order:
-                # image[...,1] *= blend_amount
-                image[..., 1] = (image[..., 1] * blend_amount).astype(int)
-                arr = grey_blit(image, arr, blend_mode=blend_mode)
-            else:
-                # arr[...,1] *= (1 - blend_amount)
-                arr[..., 1] = (arr[..., 1] * (1 - blend_amount)).astype(int)
-                arr = grey_blit(arr, image, blend_mode=blend_mode)
-
+            # change alpha of the image
+            if blend_amount > 0:
+                if blend_order:
+                    # image[...,1] *= blend_amount
+                    image[..., 1] = (image[..., 1] * blend_amount).astype(int)
+                    arr = grey_blit(image, arr, blend_mode=blend_mode)
+                else:
+                    # arr[...,1] *= (1 - blend_amount)
+                    arr[..., 1] = (arr[..., 1] * (1 - blend_amount)).astype(int)
+                    arr = grey_blit(arr, image, blend_mode=blend_mode)
+        except Exception:
+            surfsz = arr.shape
+            imsample = (n.zeros(surfsz) + 255).astype(arr.dtype)
+            arr=imsample
         # pyplot.imshow(image[...,0], cmap=cm.Greys_r)
         # pyplot.show()
 
@@ -1252,7 +1267,8 @@ class WordRenderer(object):
 
     def getPrintCaptcha(self,font,display_text_list,bg_surf,char_spacing,spaceH,size,curved=False,label=" ",adjust_value={}):
         display_text = display_text_list[0]
-
+        if "（" in display_text:
+            dksj=0
         mid_idx = int(math.floor(len(display_text) / 2))
         curve = [0 for c in display_text]
         rotations = [0 for c in display_text]
@@ -1501,7 +1517,7 @@ class WordRenderer(object):
         display_text=list(display_text)
         display_text_list=[]
         temp=[]
-        lineChars=info["lineChars"]
+        lineChars=info["char_config"]["lineChars"]
         if lineChars==0:
             lineChars=len(display_text)
         for c in display_text:
@@ -1585,12 +1601,12 @@ class WordRenderer(object):
 
 
         try:
-            interval=info["spaceVer"]
+            interval=info["char_config"]["spaceVer"]
         except Exception:
             interval=[5,5]
         spaceH=random.randint(interval[0],interval[1])
         try:
-            char_spacing=info["char_spacing"]
+            char_spacing=info["char_config"]["char_spacing"]
         except Exception:
             print("error:char_spacing could not be found")
             char_spacing=10
@@ -1614,7 +1630,7 @@ class WordRenderer(object):
             font.antialiased = True
             font.origin = True
             #黑底白字
-            bg_surf, char_bbs=self.getPrintCaptcha(font,display_text_list,bg_surf,char_spacing,spaceH,fs['size'],fs["curved"],label=info["label"],adjust_value=info["leftAdjust"])
+            bg_surf, char_bbs=self.getPrintCaptcha(font,display_text_list,bg_surf,char_spacing,spaceH,fs['size'],fs["curved"],label=info["label"],adjust_value=info["char_config"]["leftAdjust"])
             bg_arr = self.get_ga_image(bg_surf)  # 0,1（有值）
             bound=bg_arr[..., 1]
         else:
@@ -1654,7 +1670,7 @@ class WordRenderer(object):
         # pygame.display.flip()
         # wait_key()
 
-        noise = info["isNoise"]
+        noise = info["noise_config"]["isNoise"]
         try:
             value = info["bold"]
         except Exception:
@@ -1784,10 +1800,19 @@ class WordRenderer(object):
 
         l1_arr = self.imcrop(l1_arr, bb)
         l1_arr = l1_arr * value
-        l1_arr = self.add_fillimage_p(l1_arr,info["output_config"])
+        flag=False
+        try:
+            if info["noise_config"]["useOriBck"]:
+                flag=True
+        except Exception:
+            pass
+        if flag:
+            l1_arr = self.add_fillimage_p(l1_arr, info["output_config"])
+            l1_arr = l1_arr[..., 1]
+        #
         #gray=rgb2gray(l1_arr)
         #3通道图
-        gray=l1_arr[...,1]
+        gray=l1_arr
         gray = gray.reshape((gray.shape[0], gray.shape[1], 1))
 
         #2通道
