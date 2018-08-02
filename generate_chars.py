@@ -232,3 +232,18 @@ class CharsGenerator(object):
     #机构名称
     def zujijigou_addr(self,path=None):
         return self.shuiwudengjizheng_1(path)
+    def signature_num(self,path=None):
+        s = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "C", "K", "N", "P", "R", "U", "V", "X", "Y"]
+        while True:
+            yield "".join(random.sample(s,16))
+
+    #纳税人名称
+    def test_dot(self,path=None):
+        lists = []
+        with open(path) as ff:
+            for line in ff:
+                line=line.strip()
+
+                lists.append(line.decode('utf-8'))
+        while True:
+            yield "".join(random.sample(lists, 40))
