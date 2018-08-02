@@ -190,7 +190,7 @@ def create_synthetic_data(lmdb_path,imfolder_path,dataset,NUM_TO_GENERATE,lmdb_p
     else:
         corpus = corp_class()
     
-    fontPath=info["FontDir"]
+    fontPath=info["char_config"]["FontDir"]
     if len(sys.argv) == 4 and False:
          fontabc = sys.argv[3]
          fontstate = FontState(font_list = fontabc )
@@ -198,13 +198,13 @@ def create_synthetic_data(lmdb_path,imfolder_path,dataset,NUM_TO_GENERATE,lmdb_p
          print "wangxiaobo"
     else:
         #字体路径
-        fontstate = FontState(path=fontPath,fontSize=info["FontSize"],isRandom=info["isNoise"])
+        fontstate = FontState(path=fontPath,fontSize=info["char_config"]["FontSize"],isRandom=info["noise_config"]["isNoise"])
         fontstate.random_caps = settings['fontstate']['random_caps']
-    colourstate = TrainingCharsColourState(settings['trainingchars_fn'][iscluster])
+    colourstate = TrainingCharsColourState(info["trainingchars_fn"])
     if not isinstance(settings['fillimstate'], list):
         #背景
 
-        fillimstate = SVTFillImageState(info["labelBackgdir"],info["randomBackgdir"],info["isNoise"])
+        fillimstate = SVTFillImageState(info["labelBackgdir"],info["noise_config"]["randomBackgdir"],info["noise_config"]["isNoise"])
     else:
         # its a list of different fillimstates to combine
         states = []
@@ -236,7 +236,7 @@ def create_synthetic_data(lmdb_path,imfolder_path,dataset,NUM_TO_GENERATE,lmdb_p
 
     i = 0
    # filesaveinfo = open( lmdb_path_pre + "EngSynthesisSample_" +str(fileindex) , "w")
-    for  display_text1 in generator(info["charDir"]):
+    for  display_text1 in generator(info["char_config"]["charDir"]):
         if i > NUM_TO_GENERATE:
             break
 
@@ -290,7 +290,7 @@ def create_synthetic_data(lmdb_path,imfolder_path,dataset,NUM_TO_GENERATE,lmdb_p
            continue
         print 'Creating Image :', count,"complete:",float(fileindex+0.00005*i)/10
         filesaveinfo = open( lmdb_path_pre + "EngSynthesisSample_" +str(fileindex) , "a+")
-        if label=="￥" or label=="tax1" or (not info["keep_label"]):
+        if label=="￥" or label=="tax1" or (not info["output_config"]["keep_label"]):
             label=" "
         filesaveinfo.write(str(fileindex) +"/" +str(count) + ".jpg" + " " +label.decode("utf-8" )+" "+data['text'] + "\t\n")
         filesaveinfo.close() 
@@ -350,7 +350,7 @@ def main(argv):
     print "-------------gd"
     print MAXI
 
-    train_im_folder_path=info["output_dir"]
+    train_im_folder_path=info["output_config"]["output_dir"]
     val_im_folder_path='/home/user/wxb/syn/Synthetic_Data_Engine_For_Text_Recognition/text-renderer/vgg_synthetic_custom_val/'
 
 	#Setting LMDB Folder Path
