@@ -23,8 +23,8 @@ sys.setdefaultencoding( "utf-8" )
 def parse_args(args):
     parser = argparse.ArgumentParser(prog="GameServer")
     parser.add_argument('configfile', nargs=1,type=str, help='')
-    #parser.add_argument('--className', default="银行卡", type=str, help='')
-    #parser.add_argument('--label', default="卡号", type=str, help='')
+    parser.add_argument('--className', default="银行卡", type=str, help='')
+    parser.add_argument('--label', default="卡号", type=str, help='')
     #parser.add_argument('--save_pic_dir', default="/home/user/", type=str, help='')
     return parser.parse_args(args)
 
