@@ -1267,7 +1267,7 @@ class WordRenderer(object):
 
     def getPrintCaptcha(self,font,display_text_list,bg_surf,char_spacing,spaceH,size,curved=False,label=" ",adjust_value={}):
         display_text = display_text_list[0]
-        if "（" in display_text:
+        if "￥" in display_text:
             dksj=0
         mid_idx = int(math.floor(len(display_text) / 2))
         curve = [0 for c in display_text]
