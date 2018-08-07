@@ -247,3 +247,7 @@ class CharsGenerator(object):
                 lists.append(line.decode('utf-8'))
         while True:
             yield "".join(random.sample(lists, 40))
+    def number(self,path=None):
+        while True:
+            b = random.randint(10000000, 99999999)
+            yield ('%d' % b)
