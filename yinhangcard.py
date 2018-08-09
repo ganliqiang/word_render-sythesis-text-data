@@ -89,11 +89,12 @@ def readImagList(pathImage):
 
 
 
-def makePic(charslist,imagDic,font_size=20,char_spacing=10,adjust_value={}):
+def makePic(charslist,imagDic,font_size=20,char_spacing=10,adjust_value={},standardH=None):
     #替换“点”
-
-    standardW=[30,34]
-    stdW=random.randint(standardW[0],standardW[1])
+    try:
+        stdW=random.randint(standardH[0],standardH[1])
+    except Exception:
+        stdW=0
     rate0 = font_size / 20.0
     result=[]
     for chars in charslist:
@@ -123,8 +124,9 @@ def makePic(charslist,imagDic,font_size=20,char_spacing=10,adjust_value={}):
             if imagDic.has_key(char):
                 char_image = Image.open(random.choice(imagDic[char]))
                 width,height = char_image.size
-                rate=rate0*float(stdW)/float(height)
-                rate=1
+                if stdW>0:
+                    rate=rate0*float(stdW)/float(height)
+                else:rate=rate0
 
                 width = int(rate * width)
                 height = int(rate * height)
