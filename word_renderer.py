@@ -364,7 +364,8 @@ class FontState(object):
                     for subfile in os.listdir(filePath):
                         temp.append(os.path.join(filePath, subfile))
                     result[file.decode("utf-8")] = temp
-            result[u"."] = result.pop("point")
+            if result.has_key("point"):
+                result[u"."] = result.pop("point")
             self.fontPic = result
 
     def get_sample(self):
@@ -705,7 +706,7 @@ class SVTFillImageState(FillImageState):
                 setting = json.load(f, "gbk")
 
                 print  setting[0]["rect"]
-                for tt in setting[:3]:
+                for tt in setting[:len(surfarr1)]:
                     if len(tt["rect"].split(",")) != 4:
                         # img.show
                         return
@@ -718,7 +719,10 @@ class SVTFillImageState(FillImageState):
             (left, up, right, down)=(2,2,img.size[0], img.size[1])
             boxs.append((left, up, right, down))
         char_shape_list=[surfarr.shape for surfarr in surfarr1]
-        boxslist=adjust3(char_shape_list,boxs)
+        boxslist=boxs
+        if len(boxs)>2:
+            boxslist=adjust3(char_shape_list,boxs)
+
 
         for surfarr,(left, up, right, down) in zip(surfarr1,boxslist):
             box0 = (left, up, right, down)
@@ -1291,7 +1295,7 @@ class WordRenderer(object):
     def getPrintCaptcha(self,font,display_text_list,bg_surf,char_spacing,spaceH,size,curved=False,label=" ",adjust_value={}):
         #display_text_list=[['1','2','3','4','5','6','7']]
         display_text = display_text_list[0]
-        if "￥" in display_text:
+        if "1" in display_text:
             dksj=0
         mid_idx = int(math.floor(len(display_text) / 2))
         curve = [0 for c in display_text]
@@ -1337,9 +1341,6 @@ class WordRenderer(object):
         adjust_value[u"I"] = int(1* wid)
         adjust_value[u"1"] = int(0.5 * wid)
         '''
-        if label == "NO":
-            # adjust = int(0.7 * wid)
-            adjust_value[u"1"] = 0
         '''
         if label=="NO":
             #adjust = int(0.7 * wid)
@@ -1704,8 +1705,15 @@ class WordRenderer(object):
                 #img.show()
                 bound_list.append(bound)
         else:
-
-            bg_surf=makePic(testuncodelist,self.fontstate.fontPic, font_size=fs['size'], char_spacing=char_spacing,adjust_value=info["char_config"]["upAdjust"])
+            try :
+                upAdjust=info["char_config"]["upAdjust"]
+            except Exception:
+                upAdjust={}
+            try :
+                height=info["char_config"]["height"]
+            except Exception:
+                height=None
+            bg_surf=makePic(testuncodelist,self.fontstate.fontPic, font_size=fs['size'], char_spacing=char_spacing,adjust_value=upAdjust,standardH=height)
             bound_list=[]
             for bg in bg_surf:
                 # 3通道
