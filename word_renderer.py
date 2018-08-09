@@ -27,7 +27,7 @@ import pandas as pd
 import cv2
 import json
 from skimage import exposure, util
-from yinhangcard import makePic,adjustBck
+from yinhangcard import makePic,adjust3
 from back_adjust import BackAdjust
 
 def wait_key():
@@ -351,10 +351,21 @@ class FontState(object):
     random_kerning = 0.2
     random_kerning_amount = 0.1
 
-    def __init__(self, path="/home/ubuntu/Datasets/SVT/",fontSize=25,isRandom=False):
+    def __init__(self, path="/home/ubuntu/Datasets/SVT/",fontSize=25,isRandom=False,fontPic=False):
         self.fonts = [os.path.join(path, f.strip()) for f in os.listdir(path)]
         self.size=[fontSize,fontSize]
         self.isRandom=isRandom
+        if fontPic:
+            result = {}
+            for file in os.listdir(path):
+                filePath = os.path.join(path, file)
+                if os.path.isdir(filePath):
+                    temp = []
+                    for subfile in os.listdir(filePath):
+                        temp.append(os.path.join(filePath, subfile))
+                    result[file.decode("utf-8")] = temp
+            result[u"."] = result.pop("point")
+            self.fontPic = result
 
     def get_sample(self):
         """
@@ -384,7 +395,6 @@ class FontState(object):
                 'capsmode': random.choice(self.capsmode), 'curved': n.random.rand() < self.curved,
                 'random_kerning': n.random.rand() < self.random_kerning,
                 'random_kerning_amount': self.random_kerning_amount, }
-
 
 class AffineTransformState(object):
     """
@@ -654,7 +664,7 @@ class SVTFillImageState(FillImageState):
 
     def __init__(self, label_data_dir,random_data_dir,isNoise):
         list_fn = []
-        if os.path.exists(random_data_dir):
+        if os.path.exists(label_data_dir):
             for file in os.listdir(label_data_dir):
                 if file.endswith(".jpg"):
                     list_fn.append(os.path.join(label_data_dir,file))
@@ -672,78 +682,91 @@ class SVTFillImageState(FillImageState):
         #    with open(gtmat_fn) as f:
         #        self.IMLIST += (f.read().splitlines())
         #        print self.IMLIST
-    def get_sample_p(self, surfarr,outconfig=None):
+    def get_sample_p(self, surfarr1,outconfig=None):
         import numpy as np
 
         try :
             fileimge = random.choice(self.label_back)
-            h, w = surfarr.shape[:2]
-            print h
+
             img = Image.open(fileimge)
         except Exception:
+            if len(surfarr1)>1:
+                return None
+            surfarr=surfarr1[0]
             surfarr=surfarr.astype(np.uint8)
             surfarr[:] = 255 - surfarr[:]
             surfarr = surfarr.reshape((surfarr.shape[0], surfarr.shape[1], 1))
             return np.concatenate((surfarr, surfarr, surfarr), axis=2)
         faldl = fileimge.replace(".jpg", ".lar")
+        boxs=[]
         #设置粘贴区域
         try:
             with open(faldl, 'rb') as f:
                 setting = json.load(f, "gbk")
+
                 print  setting[0]["rect"]
-                tt = setting[0]
-            if len(tt["rect"].split(",")) != 4:
-                # img.show
-                return
-            left = int(tt["rect"].split(",")[0])
-            up = int(tt["rect"].split(",")[1])
-            right = int(tt["rect"].split(",")[2])
-            down = int(tt["rect"].split(",")[3])
+                for tt in setting[:3]:
+                    if len(tt["rect"].split(",")) != 4:
+                        # img.show
+                        return
+                    left = int(tt["rect"].split(",")[0])
+                    up = int(tt["rect"].split(",")[1])
+                    right = int(tt["rect"].split(",")[2])
+                    down = int(tt["rect"].split(",")[3])
+                    boxs.append((left, up, right, down))
         except Exception:
             (left, up, right, down)=(2,2,img.size[0], img.size[1])
-        box0 = (left, up, right, down)
-        #背景调整
-        try:
-            adjust=BackAdjust(img,charSize=surfarr.shape[:2],oriBox=box0,Height=outconfig["output_height"],Width=outconfig["output_width"])
-            adjust_fun=getattr(adjust,outconfig["back_adjust"])
-            img, (left, up, right, down)=adjust_fun()
-        except Exception:
-            #未设置背景调整
-            pass
-        if up + h >= down or left + w >= right:
-            print("error:the font size is too big")
-            #粘贴区域不足以容下字符图
-            raise ValueError
-        #生成随机区域
-        if  outconfig["ver_random"]:
-            down = random.randint(up + h, down)
-            up = down - h
-        else:down=up+h
+            boxs.append((left, up, right, down))
+        char_shape_list=[surfarr.shape for surfarr in surfarr1]
+        boxslist=adjust3(char_shape_list,boxs)
 
-        if  outconfig["hor_random"]:
-            right = random.randint(left + w, right)
-            left = right - w
-        else:right=left+w
-        alpha = surfarr
+        for surfarr,(left, up, right, down) in zip(surfarr1,boxslist):
+            box0 = (left, up, right, down)
 
-        #转成白底黑字
-        alpha[:] = 255 - alpha[:]
-        alpha = alpha.reshape((alpha.shape[0], alpha.shape[1], 1))
-        surfarr = np.concatenate((alpha, alpha, alpha), axis=2)
+            #背景调整
+            try:
+                adjust=BackAdjust(img,charSize=surfarr.shape[:2],oriBox=box0,Height=outconfig["output_height"],Width=outconfig["output_width"])
+                adjust_fun=getattr(adjust,outconfig["back_adjust"])
+                img, (left, up, right, down)=adjust_fun()
+            except Exception:
+                #未设置背景调整
+                pass
 
-        region = img.crop((left, up, right, down))
-        region = np.array(region)
+            h, w = surfarr.shape[:2]
+            if up + h > down or left + w > right:
+                print("error:the font size is too big")
+                #粘贴区域不足以容下字符图
+                raise ValueError
+            #生成随机区域
+            if  outconfig["ver_random"]:
+                down = random.randint(up + h, down)
+                up = down - h
+            else:down=up+h
 
-        surfarr = surfarr.astype(np.float32)
-        surfarr[:] = surfarr[:] / 255.0
-        if outconfig["red"]:
-            surfarr[...,0]=1
-        region=region*surfarr
-        print(region.shape[0])
-        region = region.astype(np.uint8)
+            if  outconfig["hor_random"]:
+                right = random.randint(left + w, right)
+                left = right - w
+            else:right=left+w
+            alpha = surfarr
 
-        img.paste(Image.fromarray(region), (left, up, right, down))
-        if not outconfig["keep_label"] :
+            #转成白底黑字
+            alpha[:] = 255 - alpha[:]
+            alpha = alpha.reshape((alpha.shape[0], alpha.shape[1], 1))
+            surfarr = np.concatenate((alpha, alpha, alpha), axis=2)
+
+            region = img.crop((left, up, right, down))
+            region = np.array(region)
+
+            surfarr = surfarr.astype(np.float32)
+            surfarr[:] = surfarr[:] / 255.0
+            if outconfig["red"]:
+                surfarr[...,0]=1
+            region=region*surfarr
+            print(region.shape[0])
+            region = region.astype(np.uint8)
+            img.paste(Image.fromarray(region), (left, up, right, down))
+            #img.show()
+        if not outconfig["keep_label"] and False:
             a = random.randint(  0, 3)
             b = random.randint(  0, 3)
             c = random.randint(  0, 3)
@@ -907,19 +930,19 @@ class WordRenderer(object):
         self.invert_surface(surf)
         return surf
 
-    def get_rect(self,w,h):
+    def get_rect(self,w,h,angle):
         halfW=w/2.0
         halfH=h/2.0
         #angle1=math.atan(float(h)/w)
-        try:
-            angle = self.extraInfo["noise_config"]["rotateAngle"]
-        except Exception:
-            angle=5
-        random_angle=random.uniform(0,angle)
-        random_angle=math.radians(random_angle)
+        #try:
+         #   angle = self.extraInfo["noise_config"]["rotateAngle"]
+        #except Exception:
+         #   angle=5
+        #random_angle=random.uniform(0,angle)
+        random_angle=math.radians(angle)
 
         length=halfW*math.tan(random_angle)
-        length=random.randint(-1,1)*length
+        #length=random.randint(-1,1)*length
         point1=[0,length]
         point2=[w-1,0]
         point3 = [0, h+length]
@@ -930,7 +953,7 @@ class WordRenderer(object):
 
     def fandom_dlt_ratio(self, maxdlt, deno, orilen):
         return n.random.randint(-maxdlt, maxdlt) / (1.0*deno)*orilen
-    def apply_perspective_arr(self, arr, affstate, perstate, filtering=Image.BICUBIC):        
+    def apply_perspective_arr(self, arr,pts31, filtering=Image.BICUBIC):
         img = Image.fromarray(arr)
 
 
@@ -977,7 +1000,7 @@ class WordRenderer(object):
 
 
         pts3 = np.float32([[dltx0, dlty0], [img.width+dltx1, dlty1], [dltx2, img.height+dlty2], [img.width+dltx3, img.height+dlty3]])
-        pts31 = self.get_rect(img.width, img.height)
+        #pts31 = self.get_rect(img.width, img.height)
         pts4 = np.float32([ [0, 0], [img.width, 0], [0, img.height], [img.width, img.height ] ])
 
         abd = cv2.getPerspectiveTransform( pts4, pts31)
@@ -1266,6 +1289,7 @@ class WordRenderer(object):
         return arr.reshape(origarr.shape)
 
     def getPrintCaptcha(self,font,display_text_list,bg_surf,char_spacing,spaceH,size,curved=False,label=" ",adjust_value={}):
+        #display_text_list=[['1','2','3','4','5','6','7']]
         display_text = display_text_list[0]
         if "￥" in display_text:
             dksj=0
@@ -1327,6 +1351,8 @@ class WordRenderer(object):
         if label == "代码":
             adjust = int(0.6 * wid)
         '''
+
+        rect = bg_surf.get_rect()
         for i in range(lineNum):
             if len(display_text_list[i]) <= mid_idx:
                 rect.centery += (rect.height + spaceH + curve[mid_idx])
@@ -1361,10 +1387,10 @@ class WordRenderer(object):
 
         rect.centery -= (i) * (rect.height + spaceH + curve[mid_idx])
         # "1"比较特殊，后面字符位置需要调整
-        rect = last_rect
-
+        rect = pygame.Rect(last_rect)
+        char_fact = 1.0
         for i, c in enumerate(display_text[mid_idx + 1:]):
-            char_fact = 1.0
+
             last_rect.topleft = (last_rect.topright[0] + char_spacing * char_fact, last_rect.topleft[1])
             for ii in range(lineNum):
                 # if fs['random_kerning'] and False:
@@ -1410,9 +1436,8 @@ class WordRenderer(object):
                         flag = False
                     last_rect = newrect
         # render chars to the left
-
         last_rect = rect
-        last_rect.topright = (last_rect.topleft[0] - char_spacing * char_fact, last_rect.topleft[1])
+        #last_rect.topright = (last_rect.topleft[0] - char_spacing * char_fact, last_rect.topleft[1])
         for i, c in enumerate(reversed(display_text[:mid_idx])):
             char_fact = 1.0
             last_rect.topright = (last_rect.topleft[0] - char_spacing * char_fact, last_rect.topleft[1])
@@ -1460,6 +1485,7 @@ class WordRenderer(object):
 
                 last_rect = newrect
             last_rect = newrect
+
         return bg_surf,char_bbs
 
 
@@ -1480,6 +1506,7 @@ class WordRenderer(object):
         # clear bg
         # bg_surf = pygame.Surface(self.sz, SRCALPHA, 32)
         # bg_surf = bg_surf.convert_alpha()
+
         if display_text is None:
             # get the text to render
 
@@ -1513,7 +1540,28 @@ class WordRenderer(object):
         if info is None:
             return
         #display_text=u"城东‘区省“区"
+
+        if isinstance(display_text,list):
+            testuncodelist = display_text
+            testuncode=display_text[0]
+            for strr in display_text[1:]:
+                testuncode+=" "+strr
+        else:
+            testuncode=display_text
+            testuncodelist=[display_text]
+
+        '''
+        display_text = display_text.strip()
         testuncode=display_text
+        testuncodelist=[]
+        testuncode=testuncode.strip(u"日")
+        temp=testuncode.split("年")
+        testuncodelist.append(temp[0])
+        temp=temp[1].split(u"月")
+        testuncodelist.extend(temp)
+        '''
+
+        '''
         display_text=list(display_text)
         display_text_list=[]
         temp=[]
@@ -1527,7 +1575,7 @@ class WordRenderer(object):
                 temp=[]
         if len(temp)>0:
             display_text_list.append(temp)
-
+        '''
         fs = self.fontstate.get_sample()
         #fs['size']=30
         # cl# !/usr/bin/env python
@@ -1582,10 +1630,7 @@ class WordRenderer(object):
         #         if numtype == 2:
         #               acadgd = aear bg
         # bg_surf = pygame.Surface(self.sz, SRCALPHA, 32)
-        bg_surf = pygame.Surface((round(2.0 * fs['size'] * len(display_text)), self.sz[1]*5), SRCALPHA, 32)
-        char_bbs=[]
-        char_bbs.append(bg_surf.get_rect())
-        print(bg_surf.get_size())
+
 
 
         # print 'hey inside generate_sample'
@@ -1614,6 +1659,10 @@ class WordRenderer(object):
             fontPic=info["fontPic"]
         except Exception:
             fontPic=False
+        bg_surf = pygame.Surface((round(2.0 * fs['size'] * len(display_text)), self.sz[1] * 5), SRCALPHA, 32)
+        char_bbs = []
+        char_bbs.append(bg_surf.get_rect())
+
         if not fontPic:
             font = freetype.Font(fs['font'], size=fs['size'])
 
@@ -1629,16 +1678,42 @@ class WordRenderer(object):
             #char_spacing = fs['char_spacing']
             font.antialiased = True
             font.origin = True
-            #黑底白字
-            bg_surf, char_bbs=self.getPrintCaptcha(font,display_text_list,bg_surf,char_spacing,spaceH,fs['size'],fs["curved"],label=info["label"],adjust_value=info["char_config"]["leftAdjust"])
-            bg_arr = self.get_ga_image(bg_surf)  # 0,1（有值）
-            bound=bg_arr[..., 1]
+            bound_list = []
+            lineChars = info["char_config"]["lineChars"]
+            for chars in testuncodelist:
+                display_text_list = []
+                temp = []
+                if lineChars == 0:
+                    lineChars = len(chars)
+                for c in chars:
+                    temp.append(c)
+                    if len(temp) > lineChars - 1:
+                        display_text_list.append(temp)
+                        temp = []
+                if len(temp) > 0:
+                    display_text_list.append(temp)
+                bg_surf = pygame.Surface((round(2.0 * fs['size'] * len(display_text)), self.sz[1] * 5), SRCALPHA, 32)
+
+                char_bbs.append(bg_surf.get_rect())
+                print(bg_surf.get_size())
+                #黑底白字
+                bg_surf, char_bbs=self.getPrintCaptcha(font,display_text_list,bg_surf,char_spacing,spaceH,fs['size'],fs["curved"],label=info["label"],adjust_value=info["char_config"]["leftAdjust"])
+                bg_arr = self.get_ga_image(bg_surf)  # 0,1（有值）
+                bound=bg_arr[..., 1]
+                img = Image.fromarray(255-bound)
+                #img.show()
+                bound_list.append(bound)
         else:
-            bg_surf=makePic(display_text_list[0],info["FontPicDir"], font_size=fs['size'], char_spacing=char_spacing)
-            #3通道
-            bg_arr = 255 - n.array(bg_surf)
-            bound=rgb2gray(bg_arr)
-            bound=bound.astype(n.uint8)
+
+            bg_surf=makePic(testuncodelist,self.fontstate.fontPic, font_size=fs['size'], char_spacing=char_spacing,adjust_value=info["char_config"]["upAdjust"])
+            bound_list=[]
+            for bg in bg_surf:
+                # 3通道
+                bg_arr = 255 - n.array(bg)
+                bound = rgb2gray(bg_arr)
+                bound = bound.astype(n.uint8)
+                bound_list.append(bound)
+
         #curve = [last_rect[3] + spaceH] * len(curve) + curve
 
         # show
@@ -1684,14 +1759,16 @@ class WordRenderer(object):
         except Exception:
             keeplabel = True
         if not noise:
-            from PIL import ImageEnhance
-            bound = self.imcrop(bound, bb)
-            img=Image.fromarray(bound)
-            #img.show()
-            bound = bound *value
+            for i,bound in enumerate(bound_list):
+                bb = pygame.Rect(self.get_bb(bound))
+                bound = self.imcrop(bound, bb)
+                img=Image.fromarray(bound)
+                #img.show()
+                bound = bound *value
+                bound_list[i]=bound
 
             #bg_arr = exposure.adjust_gamma(image=bg_arr, gamma=math.exp(5))
-            bound = self.add_fillimage_p(bound,info["output_config"])
+            bound = self.add_fillimage_p(bound_list,info["output_config"])
 
 
             if bound.ndim<3:
@@ -1709,7 +1786,31 @@ class WordRenderer(object):
             print testuncode
             return {'image': bound, 'text': testuncode, 'label': label,
                     'chars': n.array([[c.x, c.y, c.width, c.height] for c in char_bbs])}
+        flag = True
+        try:
+            if info["noise_config"]["useOriBck"]:
+                flag = True
+        except Exception:
+            pass
+        angle = info["noise_config"]["rotateAngle"]
+        random_angle = random.uniform(-angle, angle)
+        for i, bound in enumerate(bound_list):
+
+            #img=Image.fromarray(bound)
+            pts31 = self.get_rect(bound.shape[1], bound.shape[0],random_angle)
+            bound = self.apply_perspective_arr(bound,pts31)
+            bb = pygame.Rect(self.get_bb(bound))
+            bound = self.imcrop(bound, bb)
+            bound = bound * value
+            bound_list[i] = bound
+            img = Image.fromarray(bound)
+            #img.show()
+            pass
+        if flag:
+            l1_arr = self.add_fillimage_p(bound_list, info["output_config"])
+            l1_arr = l1_arr[..., 1]
         # border/shadow
+        '''
         if fs['border']:
             l1_arr, l2_arr = self.get_bordershadow(bg_arr, cs[2])
         else:
@@ -1809,8 +1910,10 @@ class WordRenderer(object):
         if flag:
             l1_arr = self.add_fillimage_p(l1_arr, info["output_config"])
             l1_arr = l1_arr[..., 1]
+        '''
         #
         #gray=rgb2gray(l1_arr)
+        import numpy as np
         #3通道图
         gray=l1_arr
         gray = gray.reshape((gray.shape[0], gray.shape[1], 1))
@@ -1818,6 +1921,7 @@ class WordRenderer(object):
         #2通道
         l1_arr=n.concatenate((n.zeros(gray.shape)+np.random.randint(150,160),gray),axis=2)
         if fs['border']:
+            l1_arr, l2_arr = self.get_bordershadow(bg_arr, cs[2])
             l2_arr = self.imcrop(l2_arr, bb)
         if char_annotations:
             # adjust char bbs
