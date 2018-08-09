@@ -4,7 +4,7 @@ import os
 import re
 import random
 import time
-from create_corpus import create_amount_in_word,create_amount_in_figure
+from create_corpus import create_amount_in_word,create_amount_in_figure,create_date_single
 
 class CharsGenerator(object):
     def __init__(self, char_dir=None, charsSet=None, charLen=1):
@@ -189,6 +189,31 @@ class CharsGenerator(object):
     #注册资本 大写金额
     def yingyezhichao_money_big(self,path=None):
         return create_amount_in_word()
+
+    def date_capital(self,path=None):
+        for display_text in create_date_single():
+            display_text = display_text.strip()
+            display_text = display_text.strip(u"日")
+            testuncodelist = []
+            temp = display_text.split("年")
+            testuncodelist.append(temp[0])
+            testuncodelist.extend(temp[1].split(u"月"))
+            yield testuncodelist
+    def loans_num(self,path=None):
+        all_chars = u'0123456789'
+        chars_list = []
+        # print '正在生成小写金额样本...'
+        while True:
+            if random.uniform(0,1)<0.8:
+                integer_part=random.randint(-9,9)
+                integer_part=max(0,integer_part)
+            else:integer_part=random.randint(10,100)
+            strr=str(integer_part)+"."+str(random.randint(0,9))+str(random.randint(0,9))
+            strr=strr.decode("utf-8")
+            yield strr
+
+
+
 
 
     #增值税专用发票----------
