@@ -197,8 +197,12 @@ def create_synthetic_data(lmdb_path,imfolder_path,dataset,NUM_TO_GENERATE,lmdb_p
          fontstate.random_caps = 1
          print "wangxiaobo"
     else:
+        try:
+            fontPic = info["fontPic"]
+        except Exception:
+            fontPic = False
         #字体路径
-        fontstate = FontState(path=fontPath,fontSize=info["char_config"]["FontSize"],isRandom=info["noise_config"]["isNoise"],fontPic=info["fontPic"])
+        fontstate = FontState(path=fontPath,fontSize=info["char_config"]["FontSize"],isRandom=info["noise_config"]["isNoise"],fontPic=fontPic)
         fontstate.random_caps = settings['fontstate']['random_caps']
     colourstate = TrainingCharsColourState(info["trainingchars_fn"])
     if not isinstance(settings['fillimstate'], list):
