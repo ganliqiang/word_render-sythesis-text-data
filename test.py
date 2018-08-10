@@ -14,12 +14,219 @@ import json
 from yinhangcard import makePic
 
 from generate_word_training_data import byteify
+from create_corpus import create_date
 from testclass import Generate
 import sys
-
+import time
+import math
+import numpy as np
 
 
 print sys.getdefaultencoding()
+
+
+aa=[1,2,3,4]
+cc=aa
+for i in range(5):
+    aa[i]=10+i
+'''
+        rect=bg_surf.get_rect()
+        dhsk=rect
+        rect.x = 100
+        for i in range(5):
+            rect= bg_surf.get_rect()
+            rect.x = 99
+            pass
+'''
+
+bb=aa[:2]
+for date in create_date():
+    list = []
+    temp = date.split("年")
+    list.append(temp[0])
+    temp = temp[1].split(u"月")
+    list.extend(temp)
+    vhjksd=0
+
+
+
+
+
+    fdhsk=date
+    print(date)
+list=tuple(range(10))
+hs=map(str,list)
+
+
+
+
+
+
+def demo(*para):
+
+    para_list=np.array(para)
+    mean=para_list.mean()
+    return mean,(x for x in para if x>mean)
+
+gsd=demo(1,3,4,5,6)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+count_down = 10 # 设置倒计时时间，单位：秒
+interval = 1 # 设置屏幕刷新的间隔时间，单位：秒
+for i in range(0, int(count_down/interval)+1):
+    print("\r"+"▇"*i+" "+str(i*10)+"%"),
+    time.sleep(interval)
+print("\n加载完毕")
+
+
+
+
+
+
+for i in range(100):
+    #sys.stdout.write('\r')
+    #sys.stdout.write('已扫描%d个文件' % i)
+    #print('\r'),
+    print('\r已扫描%d个文件' % i),
+    time.sleep(1)
+
+
+
+
+
+for progress in range(100):
+    time.sleep(0.5)
+    sys.stdout.write("Download progress: %d%%   \r" % (progress))
+    sys.stdout.flush()
+
+
+
+
+
+for i in range(5):
+    #print("wer,%d\r" %i),
+    print 'Downloading:%d\r' % i,
+    #sys.stdout.flush()
+    time.sleep(2)
+
+
+
+
+
+
+
+
+
+
+
+path="/home/user/sample_generator/cortext/data/"
+result1=[]
+i=0
+filePath="/home/user/sample_generator/cortext/data/code_list.txt"
+with open(filePath) as ff:
+    for line in ff:
+        line.strip()
+        i=i+1
+        print(line,i)
+        result1.append(line.decode("utf-8"))
+filePath="/home/user/sample_generator/cortext/data/label_applicant.txt"
+result2=[]
+
+with open(filePath) as ff:
+    for line in ff:
+        line.strip()
+        line=line.decode("GB18030")
+        if line not in result1:
+          result2.append(line)
+hfjdks=0
+with open(os.path.join(path,"result.txt"),'w') as ff:
+    for line in result2:
+        ff.write(line.encode("utf-8"))
+
+hfjdks=0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+'''
+def demo(new, old_list=[]):
+    old_list.append(new)
+    return old_list
+print(demo('5',[1,2,3,4]))
+print(demo('aaa',['a','b']))
+print(demo('a'))
+print(demo('b'))
+print(demo('5',[1,2,3,4]))
+print(demo('b1'))
+print(demo('aaa',['a','b']))
+print(demo('b2'))
+gd=0
+'''
+
+
+
+
+
+
+
+
+
+def count(n):
+    x = 0
+    while x < n:
+        value = yield x*x
+        print 'Received : %s' % value
+        if value is not None:
+            print 'Received value: %s' %value
+        x += 1
+gen = count(5)
+print gen.next()
+#print gen.send('Hello')
+#print gen.send('Helloll')
+print gen.next()
+
+print gen.next()
+
+
+
+
+
 
 '''
 gener=Generate(len=10,size=3.5)
@@ -33,7 +240,12 @@ ad={"fa":0,"g":1}
 del ad["g"]
 fs=0
 
-
+list1=[1,2,3,4]
+list2=['a','b','c','d','f']
+dhfjs=zip(list1,list2)
+list3=[('a',1),(2,'b')]
+fhdjsk=dict(list3)
+grew=0
 
 
 
